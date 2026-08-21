@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import ShareButton from "./ShareButton";
 
+export const dynamic = "force-dynamic";
+
 interface CheckResult {
   domain: string;
   safetyScore: number;
