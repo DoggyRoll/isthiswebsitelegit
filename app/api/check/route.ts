@@ -179,7 +179,9 @@ async function checkHttp(
         statusCode: httpRes.status,
       };
     } catch {
-      return { isUp: false, hasSSL: false, statusCode: null };
+      // Both HTTPS and HTTP failed — site is blocking server pings.
+      // Don't assume no SSL; mark as down but leave SSL unknown (true = no penalty).
+      return { isUp: false, hasSSL: true, statusCode: null };
     }
   }
 }
