@@ -9,9 +9,6 @@ export const dynamic = "force-dynamic";
 
 type CheckResult = SafetyReport & { error?: string };
 
-// Extend mock to include new fields
-
-
 // ── Data Fetching ─────────────────────────────────────────────────────────────
 
 async function fetchCheck(domain: string): Promise<CheckResult> {
@@ -58,13 +55,21 @@ async function fetchCheck(domain: string): Promise<CheckResult> {
   }
 }
 
-// ── Score Helpers ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function scoreColor(score: number): string {
+  if (score >= 80) return "#22c55e";
+  if (score >= 65) return "#14b8a6";
+  if (score >= 40) return "#eab308";
+  if (score >= 20) return "#f97316";
+  return "#ef4444";
+}
 
 function verdictConfig(score: number) {
   if (score >= 80) {
     return {
       label: "Likely Safe",
-      sub: "This site passed our security checks.",
+      sub: "No threats detected across all sources we checked.",
       ring: "border-green-500",
       text: "text-green-400",
       bg: "bg-green-500/10",
@@ -74,7 +79,7 @@ function verdictConfig(score: number) {
   if (score >= 65) {
     return {
       label: "Mostly Safe",
-      sub: "No major threats detected, but a few minor signals to be aware of.",
+      sub: "No major threats found, but a few signals worth knowing about.",
       ring: "border-teal-400",
       text: "text-teal-400",
       bg: "bg-teal-400/10",
@@ -84,7 +89,7 @@ function verdictConfig(score: number) {
   if (score >= 40) {
     return {
       label: "Proceed with Caution",
-      sub: "Some concerns were found. Review the details below before proceeding.",
+      sub: "Some risk signals detected — review the analysis before sharing any data.",
       ring: "border-yellow-400",
       text: "text-yellow-400",
       bg: "bg-yellow-400/10",
@@ -94,7 +99,7 @@ function verdictConfig(score: number) {
   if (score >= 20) {
     return {
       label: "High Risk",
-      sub: "Multiple red flags detected. Do not share personal or payment information.",
+      sub: "Multiple red flags detected. Do not enter personal or payment information.",
       ring: "border-orange-400",
       text: "text-orange-400",
       bg: "bg-orange-400/10",
@@ -103,7 +108,7 @@ function verdictConfig(score: number) {
   }
   return {
     label: "Avoid This Site",
-    sub: "Serious threats detected. Do not visit or enter any information.",
+    sub: "Active threats confirmed. Do not visit or interact with this site.",
     ring: "border-red-500",
     text: "text-red-400",
     bg: "bg-red-500/10",
@@ -115,56 +120,35 @@ function formatAge(days: number): string {
   if (days < 1) return "Less than 1 day old";
   if (days < 365) return `${days} day${days === 1 ? "" : "s"} old`;
   const years = Math.floor(days / 365);
-  const rem = days % 365;
-  const months = Math.floor(rem / 30);
-  if (months > 0) return `${years} yr${years === 1 ? "" : "s"} ${months} mo old`;
+  const months = Math.floor((days % 365) / 30);
+  if (months > 0) return `${years} yr${years === 1 ? "" : "s"} ${months} mo`;
   return `${years} year${years === 1 ? "" : "s"} old`;
 }
 
-function ageContext(days: number | null): string {
-  if (days === null) return "Age could not be determined.";
-  if (days < 7) return "Extremely new — scam sites are often just days old.";
-  if (days < 30) return "Less than a month old — approach with caution.";
-  if (days < 180) return "A few months old — not yet well established.";
-  if (days < 365) return "Less than a year old — still fairly new.";
-  if (days < 1825) return "A few years old — shows some history.";
-  return "Well established — older domains are generally more trustworthy.";
+type Deduction = { reason: string; amount: number };
+
+function computeDeductions(data: CheckResult): Deduction[] {
+  const d: Deduction[] = [];
+  if (data.isMalware) d.push({ reason: "Malware confirmed by Google", amount: 60 });
+  if (data.isPhishing) d.push({ reason: "Phishing confirmed by Google", amount: 60 });
+  if (data.vtStats) {
+    if (data.vtStats.malicious >= 5) d.push({ reason: `${data.vtStats.malicious} engines identified it as malicious`, amount: 60 });
+    else if (data.vtStats.malicious >= 3) d.push({ reason: `${data.vtStats.malicious} engines flagged it as malicious`, amount: 30 });
+  }
+  if (data.domainAgeDays !== null) {
+    if (data.domainAgeDays < 7) d.push({ reason: `Domain only ${data.domainAgeDays} day${data.domainAgeDays === 1 ? "" : "s"} old`, amount: 40 });
+    else if (data.domainAgeDays < 30) d.push({ reason: "Domain less than 30 days old", amount: 20 });
+  }
+  if (!data.hasSSL) d.push({ reason: "No SSL certificate", amount: 15 });
+  if (!data.isUp) d.push({ reason: "Site unreachable", amount: 10 });
+  return d;
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function SiteHeader() {
-  return (
-    <header className="w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
-      <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 group">
-          <ShieldIcon className="w-6 h-6 text-green-400 group-hover:text-green-300 transition-colors" />
-          <span className="text-white font-semibold text-sm tracking-tight">
-            IsThisSiteLegit
-          </span>
-        </Link>
-        <Link
-          href="/"
-          className="text-zinc-400 hover:text-white text-sm transition-colors"
-        >
-          ← Check another site
-        </Link>
-      </div>
-    </header>
-  );
-}
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
 function ShieldIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
@@ -197,51 +181,141 @@ function WarnIcon({ className }: { className?: string }) {
   );
 }
 
-function SecurityCheck({
-  label,
-  sublabel,
-  status,
-}: {
-  label: string;
-  sublabel: string;
-  status: "ok" | "warn" | "fail" | "unavailable";
-}) {
-  const configs = {
-    ok: {
-      icon: <CheckIcon className="w-4 h-4 text-green-400" />,
-      iconBg: "bg-green-500/15 border-green-500/30",
-      text: "text-green-400",
-    },
-    warn: {
-      icon: <WarnIcon className="w-4 h-4 text-yellow-400" />,
-      iconBg: "bg-yellow-400/15 border-yellow-400/30",
-      text: "text-yellow-400",
-    },
-    fail: {
-      icon: <XIcon className="w-4 h-4 text-red-400" />,
-      iconBg: "bg-red-500/15 border-red-500/30",
-      text: "text-red-400",
-    },
-    unavailable: {
-      icon: <span className="text-zinc-500 text-xs font-bold">—</span>,
-      iconBg: "bg-zinc-800 border-zinc-700",
-      text: "text-zinc-500",
-    },
-  };
-  const c = configs[status];
+// ── Score Ring ─────────────────────────────────────────────────────────────────
 
+function ScoreRing({ score }: { score: number }) {
+  const r = 52;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - score / 100);
+  const color = scoreColor(score);
   return (
-    <div className="flex items-start gap-3 p-4 rounded-xl bg-zinc-900 border border-zinc-800">
-      <div className={`w-8 h-8 rounded-lg border flex items-center justify-center flex-shrink-0 ${c.iconBg}`}>
-        {c.icon}
-      </div>
-      <div>
-        <p className="text-white text-sm font-medium">{label}</p>
-        <p className={`text-xs mt-0.5 ${c.text}`}>{sublabel}</p>
+    <div className="relative w-36 h-36 flex-shrink-0 flex items-center justify-center">
+      <svg className="absolute inset-0 w-full h-full" style={{ transform: "rotate(-90deg)" }} viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r={r} fill="none" stroke="#27272a" strokeWidth="10" />
+        <circle
+          cx="60" cy="60" r={r} fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={`${circ}`}
+          strokeDashoffset={`${offset}`}
+        />
+      </svg>
+      <div className="relative flex flex-col items-center leading-none">
+        <span className="text-4xl font-black tabular-nums" style={{ color }}>{score}</span>
+        <span className="text-zinc-500 text-xs font-medium mt-1">/ 100</span>
       </div>
     </div>
   );
 }
+
+// ── Source Cards ──────────────────────────────────────────────────────────────
+
+type Source = "gsb" | "vt" | "ssl" | "whois" | "ai";
+
+const SOURCE_META: Record<Source, {
+  label: string;
+  abbrev: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+  blurb: string;
+}> = {
+  gsb: {
+    label: "Google Safe Browsing",
+    abbrev: "GSB",
+    badgeBg: "bg-blue-500/15",
+    badgeText: "text-blue-400",
+    badgeBorder: "border-blue-500/25",
+    blurb: "Google's real-time database of malware, phishing, and deceptive sites.",
+  },
+  vt: {
+    label: "VirusTotal",
+    abbrev: "VT",
+    badgeBg: "bg-orange-500/15",
+    badgeText: "text-orange-400",
+    badgeBorder: "border-orange-500/25",
+    blurb: "Aggregates results from 87+ independent antivirus and URL scanners.",
+  },
+  ssl: {
+    label: "SSL Certificate",
+    abbrev: "SSL",
+    badgeBg: "bg-green-500/15",
+    badgeText: "text-green-400",
+    badgeBorder: "border-green-500/25",
+    blurb: "HTTPS encryption is required for any site where you share personal data.",
+  },
+  whois: {
+    label: "Domain Age",
+    abbrev: "AGE",
+    badgeBg: "bg-violet-500/15",
+    badgeText: "text-violet-400",
+    badgeBorder: "border-violet-500/25",
+    blurb: "Scam sites are typically registered days before they start operating.",
+  },
+  ai: {
+    label: "AI Content Scan",
+    abbrev: "AI",
+    badgeBg: "bg-indigo-500/15",
+    badgeText: "text-indigo-400",
+    badgeBorder: "border-indigo-500/25",
+    blurb: "Claude reads the live page for deceptive copy, fake urgency, and scam patterns.",
+  },
+};
+
+const STATUS_BADGE: Record<"ok" | "warn" | "fail" | "unavailable", { label: string; cls: string }> = {
+  ok:          { label: "Clean",       cls: "bg-green-500/10 border-green-500/25 text-green-400" },
+  warn:        { label: "Caution",     cls: "bg-yellow-400/10 border-yellow-400/25 text-yellow-400" },
+  fail:        { label: "Flagged",     cls: "bg-red-500/10 border-red-500/25 text-red-400" },
+  unavailable: { label: "Unavailable", cls: "bg-zinc-800 border-zinc-700 text-zinc-500" },
+};
+
+function SourceCard({
+  source,
+  status,
+  result,
+}: {
+  source: Source;
+  status: "ok" | "warn" | "fail" | "unavailable";
+  result: string;
+}) {
+  const meta = SOURCE_META[source];
+  const badge = STATUS_BADGE[status];
+  const cardBorder =
+    status === "fail" ? "border-red-800/50" :
+    status === "warn" ? "border-yellow-700/40" :
+    "border-zinc-800";
+
+  const statusIcon =
+    status === "ok" ? <CheckIcon className="w-3.5 h-3.5" /> :
+    status === "fail" ? <XIcon className="w-3.5 h-3.5" /> :
+    status === "warn" ? <WarnIcon className="w-3.5 h-3.5" /> :
+    <span className="text-[10px] font-bold">—</span>;
+
+  return (
+    <div className={`flex flex-col gap-2.5 p-4 rounded-xl bg-zinc-900 border ${cardBorder}`}>
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-lg border flex items-center justify-center flex-shrink-0 ${meta.badgeBg} ${meta.badgeBorder}`}>
+            <span className={`text-[10px] font-black tracking-tight ${meta.badgeText}`}>{meta.abbrev}</span>
+          </div>
+          <span className="text-white text-sm font-semibold">{meta.label}</span>
+        </div>
+        <span className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border flex-shrink-0 ${badge.cls}`}>
+          {statusIcon}
+          {badge.label}
+        </span>
+      </div>
+      {/* Result */}
+      <p className="text-zinc-300 text-sm leading-relaxed pl-[52px]">{result}</p>
+      {/* Educational one-liner */}
+      <p className="text-zinc-600 text-xs pl-[52px]">{meta.blurb}</p>
+    </div>
+  );
+}
+
+// ── Threat Card ───────────────────────────────────────────────────────────────
 
 function ThreatCard({ threat }: { threat: ThreatItem }) {
   return (
@@ -251,13 +325,31 @@ function ThreatCard({ threat }: { threat: ThreatItem }) {
       </div>
       <div>
         <p className="text-red-300 font-semibold text-sm">{threat.label}</p>
-        <p className="text-red-200/70 text-sm mt-0.5 leading-relaxed">{threat.explanation}</p>
+        <p className="text-red-200/60 text-sm mt-0.5 leading-relaxed">{threat.explanation}</p>
       </div>
     </div>
   );
 }
 
-// ── Main Results Component ─────────────────────────────────────────────────────
+// ── Header ────────────────────────────────────────────────────────────────────
+
+function SiteHeader() {
+  return (
+    <header className="w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
+      <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 group">
+          <ShieldIcon className="w-6 h-6 text-green-400 group-hover:text-green-300 transition-colors" />
+          <span className="text-white font-semibold text-sm tracking-tight">IsThisSiteLegit</span>
+        </Link>
+        <Link href="/" className="text-zinc-400 hover:text-white text-sm transition-colors">
+          ← Check another site
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+// ── Main Results ──────────────────────────────────────────────────────────────
 
 async function ResultsContent({ domain }: { domain: string }) {
   const data = await fetchCheck(domain);
@@ -272,10 +364,7 @@ async function ResultsContent({ domain }: { domain: string }) {
           <p className="text-xl text-white font-semibold">Couldn&apos;t analyze this site</p>
           <p className="text-zinc-400 mt-2">The site may be down, invalid, or blocking our scan.</p>
         </div>
-        <Link
-          href="/"
-          className="px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium transition-colors"
-        >
+        <Link href="/" className="px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium transition-colors">
           ← Try another site
         </Link>
       </div>
@@ -298,94 +387,110 @@ async function ResultsContent({ domain }: { domain: string }) {
 
   const vc = verdictConfig(safetyScore);
   const showVPNCTA = safetyScore < 60;
+  const deductions = computeDeductions(data);
 
-  // Count completed sources for header
+  // ── Source result strings ────────────────────────────────────────────────────
+
+  const gsbStatus: "ok" | "fail" = checksRun.googleSafeBrowsing === "flagged" ? "fail" : "ok";
+  const gsbResult =
+    data.isMalware && data.isPhishing
+      ? "Flagged for both malware distribution and phishing."
+      : data.isMalware
+      ? "Confirmed as a malware distribution site."
+      : data.isPhishing
+      ? "Confirmed as a phishing site impersonating a trusted brand."
+      : "Not listed in Google's threat database.";
+
+  const vtStatus: "ok" | "warn" | "fail" | "unavailable" =
+    checksRun.virusTotal === "unavailable" ? "unavailable" :
+    checksRun.virusTotal === "flagged" ? "fail" : "ok";
+  const vtResult =
+    vtStats === null
+      ? "Could not connect to VirusTotal — excluded from scoring."
+      : vtStats.malicious >= 3
+      ? `${vtStats.malicious} / ${vtStats.total} engines identified this as malicious.`
+      : vtStats.suspicious > 0
+      ? `${vtStats.suspicious} / ${vtStats.total} engines raised concerns; ${vtStats.malicious} confirmed malicious.`
+      : `0 / ${vtStats.total} engines found any issues.`;
+
+  const sslStatus: "ok" | "fail" = checksRun.ssl === "valid" ? "ok" : "fail";
+  const sslResult = hasSSL
+    ? "HTTPS active — your connection to this site is encrypted."
+    : "HTTP only — anything you type is transmitted in plain text.";
+
+  const ageStatus: "ok" | "warn" | "unavailable" =
+    checksRun.domainAge === "new" ? "warn" :
+    checksRun.domainAge === "unknown" ? "unavailable" : "ok";
+  const ageResult =
+    domainAgeDays === null
+      ? "Age could not be determined from WHOIS records."
+      : domainAgeDays < 7
+      ? `Registered ${domainCreatedDate ?? `${domainAgeDays} days ago`} — extremely new.`
+      : domainAgeDays < 30
+      ? `Registered ${domainCreatedDate ?? `${domainAgeDays} days ago`} — less than a month old.`
+      : domainAgeDays < 365
+      ? `Registered ${domainCreatedDate ?? `${formatAge(domainAgeDays)} ago`} — still fairly new.`
+      : `Registered ${domainCreatedDate ?? `${formatAge(domainAgeDays)} ago`} — established domain.`;
+
+  const aiStatus: "ok" | "warn" | "unavailable" =
+    checksRun.aiContent === "unavailable" ? "unavailable" :
+    checksRun.aiContent === "flagged" ? "warn" : "ok";
+  const aiResult =
+    checksRun.aiContent === "unavailable"
+      ? "Page content could not be retrieved for analysis."
+      : checksRun.aiContent === "flagged"
+      ? `${aiAnalysis?.flags.length ?? 0} suspicious pattern${(aiAnalysis?.flags.length ?? 0) === 1 ? "" : "s"} found in page content.`
+      : "No deceptive language or scam patterns detected.";
+
   const sourcesChecked = [
-    true, // GSB always runs
-    checksRun.virusTotal !== "unavailable",
-    true, // SSL always runs
-    checksRun.domainAge !== "unknown",
-    checksRun.aiContent !== "unavailable",
+    true,
+    vtStatus !== "unavailable",
+    true,
+    ageStatus !== "unavailable",
+    aiStatus !== "unavailable",
   ].filter(Boolean).length;
 
-  // Build security check rows
-  const vtLabel =
-    vtStats === null
-      ? "Not available"
-      : vtStats.malicious > 0
-      ? `${vtStats.malicious} engine${vtStats.malicious === 1 ? "" : "s"} flagged this site`
-      : `Clean across ${vtStats.total} security engines`;
-
-  const vtStatus =
-    checksRun.virusTotal === "unavailable"
-      ? "unavailable"
-      : checksRun.virusTotal === "flagged"
-      ? "fail"
-      : "ok";
-
-  const sslStatus = checksRun.ssl === "valid" ? "ok" : "fail";
-  const sslLabel = hasSSL
-    ? "Encrypted connection (HTTPS) — your data is protected in transit"
-    : "No HTTPS — anything you type can be intercepted by third parties";
-
-  const gsbStatus = checksRun.googleSafeBrowsing === "flagged" ? "fail" : "ok";
-  const gsbLabel =
-    checksRun.googleSafeBrowsing === "flagged"
-      ? "Flagged in Google Safe Browsing — reported for malware or phishing"
-      : "Not found in Google Safe Browsing threat database";
-
-  const ageStatus =
-    checksRun.domainAge === "new"
-      ? "warn"
-      : checksRun.domainAge === "unknown"
-      ? "unavailable"
-      : "ok";
-
-  const ageLabel =
-    domainAgeDays !== null
-      ? checksRun.domainAge === "new"
-        ? `${formatAge(domainAgeDays)} — new domains are common in scams, but not always suspicious`
-        : checksRun.domainAge === "recent"
-        ? `${formatAge(domainAgeDays)} — still building a track record`
-        : `${formatAge(domainAgeDays)} — established history`
-      : "Age could not be determined from WHOIS records";
-
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 py-8 px-4">
+    <div className="w-full max-w-2xl mx-auto flex flex-col gap-5 py-8 px-4">
 
       {/* Domain label */}
       <p className="text-zinc-500 text-sm text-center truncate">{domain}</p>
 
-      {/* Verdict Banner */}
-      <div className={`rounded-2xl border p-6 flex flex-col items-center gap-4 ${vc.bg} ${vc.border}`}>
-        {/* Score ring */}
-        <div className={`w-28 h-28 rounded-full border-[6px] flex items-center justify-center ${vc.ring}`}>
-          <span className={`text-4xl font-black ${vc.text}`}>{safetyScore}</span>
-        </div>
-        <div className="text-center">
-          <p className={`text-2xl font-bold ${vc.text}`}>{vc.label}</p>
-          <p className="text-zinc-300 text-sm mt-1">{vc.sub}</p>
-        </div>
-        {/* Quick status pills */}
-        <div className="flex flex-wrap gap-2 justify-center">
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${isUp ? "bg-green-500/15 border-green-500/30 text-green-400" : "bg-red-500/15 border-red-500/30 text-red-400"}`}>
-            {isUp ? "● Online" : "● Offline"}
-          </span>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${hasSSL ? "bg-green-500/15 border-green-500/30 text-green-400" : "bg-red-500/15 border-red-500/30 text-red-400"}`}>
-            {hasSSL ? "● SSL Secured" : "● No SSL"}
-          </span>
-          {domainAgeDays !== null && (
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${domainAgeDays >= 365 ? "bg-zinc-700/50 border-zinc-600 text-zinc-300" : "bg-yellow-400/10 border-yellow-400/30 text-yellow-400"}`}>
-              ● {formatAge(domainAgeDays)}
-            </span>
-          )}
+      {/* ── Score + Verdict ─────────────────────────────────────────────────── */}
+      <div className={`rounded-2xl border p-6 ${vc.bg} ${vc.border}`}>
+        <div className="flex flex-col sm:flex-row items-center gap-6">
+          <ScoreRing score={safetyScore} />
+          <div className="flex flex-col items-center sm:items-start gap-3 text-center sm:text-left flex-1 min-w-0">
+            <div>
+              <p className={`text-2xl font-black tracking-tight ${vc.text}`}>{vc.label}</p>
+              <p className="text-zinc-300 text-sm mt-1 leading-relaxed">{vc.sub}</p>
+            </div>
+            {/* Status pills */}
+            <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${isUp ? "bg-green-500/15 border-green-500/30 text-green-400" : "bg-red-500/15 border-red-500/30 text-red-400"}`}>
+                {isUp ? "● Online" : "● Offline"}
+              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${hasSSL ? "bg-green-500/15 border-green-500/30 text-green-400" : "bg-red-500/15 border-red-500/30 text-red-400"}`}>
+                {hasSSL ? "● Secure (HTTPS)" : "● No SSL"}
+              </span>
+              {domainAgeDays !== null && (
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${domainAgeDays >= 365 ? "bg-zinc-700/50 border-zinc-600 text-zinc-300" : "bg-yellow-400/10 border-yellow-400/30 text-yellow-400"}`}>
+                  ● {formatAge(domainAgeDays)}
+                </span>
+              )}
+            </div>
+            {/* Sources strip */}
+            <p className="text-zinc-600 text-xs">
+              Scanned via Google Safe Browsing · VirusTotal · WHOIS · Claude AI
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Threats — only shown if any exist */}
+      {/* ── Threats ─────────────────────────────────────────────────────────── */}
       {threats.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h2 className="text-white font-semibold text-base">
+          <h2 className="text-white font-semibold text-sm uppercase tracking-wider">
             {threats.length === 1 ? "1 Risk Detected" : `${threats.length} Risks Detected`}
           </h2>
           {threats.map((t) => (
@@ -394,163 +499,139 @@ async function ResultsContent({ domain }: { domain: string }) {
         </div>
       )}
 
-      {/* Security Checks */}
+      {/* ── Security Analysis ────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-white font-semibold text-base">Security Checks</h2>
-          <span className="text-zinc-500 text-xs">{sourcesChecked} sources checked</span>
+        <div className="flex items-center justify-between">
+          <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Security Analysis</h2>
+          <span className="text-zinc-600 text-xs">{sourcesChecked} / 5 sources</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SecurityCheck
-            label="Google Safe Browsing"
-            sublabel={gsbLabel}
-            status={gsbStatus}
-          />
-          <SecurityCheck
-            label={`VirusTotal${vtStats ? ` (${vtStats.total} engines)` : ""}`}
-            sublabel={vtLabel}
-            status={vtStatus}
-          />
-          <SecurityCheck
-            label="SSL Certificate"
-            sublabel={sslLabel}
-            status={sslStatus}
-          />
-          <SecurityCheck
-            label="Domain Age"
-            sublabel={ageLabel}
-            status={ageStatus}
-          />
-          <SecurityCheck
-            label="AI Content Analysis"
-            sublabel={
-              checksRun.aiContent === "unavailable"
-                ? "Page content could not be retrieved for analysis"
-                : checksRun.aiContent === "flagged"
-                ? `${aiAnalysis?.flags.length ?? 0} suspicious pattern${(aiAnalysis?.flags.length ?? 0) === 1 ? "" : "s"} detected in page content`
-                : "No scam patterns or deceptive language detected in page content"
-            }
-            status={
-              checksRun.aiContent === "unavailable"
-                ? "unavailable"
-                : checksRun.aiContent === "flagged"
-                ? "warn"
-                : "ok"
-            }
-          />
-        </div>
+        <SourceCard source="gsb" status={gsbStatus} result={gsbResult} />
+        <SourceCard source="vt" status={vtStatus} result={vtResult} />
+        <SourceCard source="ssl" status={sslStatus} result={sslResult} />
+        <SourceCard source="whois" status={ageStatus} result={ageResult} />
+        <SourceCard source="ai" status={aiStatus} result={aiResult} />
         {aiAnalysis?.summary && (
-          <p className="text-zinc-400 text-xs leading-relaxed px-1">
-            <span className="text-zinc-500 font-medium">AI note: </span>
+          <p className="text-zinc-500 text-xs leading-relaxed px-1">
+            <span className="text-zinc-400 font-medium">AI note: </span>
             {aiAnalysis.summary}
           </p>
         )}
       </div>
 
-      {/* Site Details */}
+      {/* ── Score Breakdown ──────────────────────────────────────────────────── */}
+      {deductions.length > 0 && (
+        <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-800">
+            <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Score Breakdown</h2>
+            <p className="text-zinc-500 text-xs mt-0.5">How we arrived at {safetyScore} / 100</p>
+          </div>
+          <div className="px-5 py-4 flex flex-col gap-2.5">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-zinc-400">Starting score</span>
+              <span className="text-zinc-200 font-semibold tabular-nums">100</span>
+            </div>
+            {deductions.map((d, i) => (
+              <div key={i} className="flex justify-between items-center text-sm">
+                <span className="text-zinc-400">{d.reason}</span>
+                <span className="text-red-400 font-semibold tabular-nums">−{d.amount}</span>
+              </div>
+            ))}
+            <div className="border-t border-zinc-800 pt-2.5 flex justify-between items-center text-sm font-bold">
+              <span className="text-white">Final score</span>
+              <span style={{ color: scoreColor(safetyScore) }} className="tabular-nums">{safetyScore}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Site Details ─────────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
         <div className="px-5 py-4 border-b border-zinc-800">
-          <h2 className="text-white font-semibold text-base">Site Details</h2>
+          <h2 className="text-white font-semibold text-sm uppercase tracking-wider">Site Details</h2>
         </div>
-        <div className="divide-y divide-zinc-800">
+        <div className="divide-y divide-zinc-800/80">
 
-          {/* Domain status */}
-          <div className="px-5 py-4 flex justify-between items-start gap-4">
-            <span className="text-zinc-400 text-sm flex-shrink-0">Status</span>
-            <span className={`text-sm text-right font-medium ${isUp ? "text-green-400" : "text-red-400"}`}>
+          <div className="px-5 py-3.5 flex justify-between items-center gap-4">
+            <span className="text-zinc-500 text-sm flex-shrink-0">Status</span>
+            <span className={`text-sm font-medium ${isUp ? "text-green-400" : "text-red-400"}`}>
               {isUp ? "Online and reachable" : "Could not be reached"}
             </span>
           </div>
 
-          {/* SSL */}
-          <div className="px-5 py-4 flex justify-between items-start gap-4">
-            <span className="text-zinc-400 text-sm flex-shrink-0">Encryption</span>
-            <span className={`text-sm text-right ${hasSSL ? "text-zinc-200" : "text-red-400"}`}>
-              {hasSSL
-                ? "HTTPS — your connection to this site is encrypted"
-                : "HTTP only — no encryption in place"}
+          <div className="px-5 py-3.5 flex justify-between items-center gap-4">
+            <span className="text-zinc-500 text-sm flex-shrink-0">Encryption</span>
+            <span className={`text-sm text-right ${hasSSL ? "text-zinc-300" : "text-red-400"}`}>
+              {hasSSL ? "HTTPS (encrypted)" : "HTTP only (unencrypted)"}
             </span>
           </div>
 
-          {/* Domain age */}
           {domainAgeDays !== null && (
-            <div className="px-5 py-4 flex justify-between items-start gap-4">
-              <span className="text-zinc-400 text-sm flex-shrink-0">Domain Age</span>
+            <div className="px-5 py-3.5 flex justify-between items-start gap-4">
+              <span className="text-zinc-500 text-sm flex-shrink-0">Domain Age</span>
               <div className="text-right">
-                <p className="text-zinc-200 text-sm">
-                  {domainCreatedDate
-                    ? `Registered ${domainCreatedDate}`
-                    : formatAge(domainAgeDays)}
+                <p className="text-zinc-300 text-sm">
+                  {domainCreatedDate ? `Registered ${domainCreatedDate}` : formatAge(domainAgeDays)}
                 </p>
-                <p className="text-zinc-500 text-xs mt-0.5">{ageContext(domainAgeDays)}</p>
+                <p className={`text-xs mt-0.5 ${domainAgeDays < 30 ? "text-yellow-500" : "text-zinc-600"}`}>
+                  {domainAgeDays < 7
+                    ? "Brand new — most scam sites are less than a week old."
+                    : domainAgeDays < 30
+                    ? "Very new — approach with caution."
+                    : domainAgeDays < 365
+                    ? "Less than a year old — still building a track record."
+                    : domainAgeDays < 1825
+                    ? "A few years of history."
+                    : "Long-established domain."}
+                </p>
               </div>
             </div>
           )}
 
-          {/* Registrar */}
           {registrar && (
-            <div className="px-5 py-4 flex justify-between items-start gap-4">
-              <span className="text-zinc-400 text-sm flex-shrink-0">Registrar</span>
-              <span className="text-zinc-200 text-sm text-right">{registrar}</span>
+            <div className="px-5 py-3.5 flex justify-between items-center gap-4">
+              <span className="text-zinc-500 text-sm flex-shrink-0">Registrar</span>
+              <span className="text-zinc-300 text-sm text-right">{registrar}</span>
             </div>
           )}
 
-          {/* WHOIS Privacy */}
           {whoisPrivacy !== null && (
-            <div className="px-5 py-4 flex justify-between items-start gap-4">
-              <span className="text-zinc-400 text-sm flex-shrink-0">WHOIS Privacy</span>
+            <div className="px-5 py-3.5 flex justify-between items-start gap-4">
+              <span className="text-zinc-500 text-sm flex-shrink-0">WHOIS Privacy</span>
               <div className="text-right">
-                <p className={`text-sm ${whoisPrivacy ? "text-zinc-200" : "text-zinc-400"}`}>
+                <p className="text-zinc-300 text-sm">
                   {whoisPrivacy ? "Owner identity protected" : "Owner details publicly listed"}
                 </p>
-                <p className="text-zinc-500 text-xs mt-0.5">
+                <p className="text-zinc-600 text-xs mt-0.5">
                   {whoisPrivacy
-                    ? "Privacy protection is a normal and common practice — it does not indicate wrongdoing."
-                    : "The domain owner's contact details are visible in public WHOIS records."}
+                    ? "Privacy protection is a standard practice — not a red flag on its own."
+                    : "Registrant contact details are visible in public WHOIS records."}
                 </p>
               </div>
             </div>
           )}
 
-          {/* VirusTotal breakdown */}
           {vtStats && (
             <div className="px-5 py-4 flex flex-col gap-3">
               <div className="flex justify-between items-center">
-                <span className="text-zinc-400 text-sm">VirusTotal Scan</span>
-                <span className={`text-sm font-medium ${vtStats.malicious > 0 ? "text-red-400" : "text-green-400"}`}>
-                  {vtStats.malicious === 0
-                    ? `All clear`
-                    : `${vtStats.malicious} flagged`}
+                <span className="text-zinc-500 text-sm">VirusTotal Engines</span>
+                <span className={`text-sm font-semibold tabular-nums ${vtStats.malicious > 0 ? "text-red-400" : "text-green-400"}`}>
+                  {vtStats.malicious === 0 ? `0 / ${vtStats.total} flagged` : `${vtStats.malicious} / ${vtStats.total} flagged`}
                 </span>
               </div>
-              {/* Progress-style breakdown */}
-              <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden flex">
+              <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden flex">
                 {vtStats.total > 0 && (
                   <>
-                    <div
-                      className="h-full bg-red-500"
-                      style={{ width: `${(vtStats.malicious / vtStats.total) * 100}%` }}
-                    />
-                    <div
-                      className="h-full bg-yellow-400"
-                      style={{ width: `${(vtStats.suspicious / vtStats.total) * 100}%` }}
-                    />
-                    <div
-                      className="h-full bg-green-500"
-                      style={{ width: `${(vtStats.clean / vtStats.total) * 100}%` }}
-                    />
+                    <div className="h-full bg-green-500" style={{ width: `${(vtStats.clean / vtStats.total) * 100}%` }} />
+                    <div className="h-full bg-yellow-400" style={{ width: `${(vtStats.suspicious / vtStats.total) * 100}%` }} />
+                    <div className="h-full bg-red-500" style={{ width: `${(vtStats.malicious / vtStats.total) * 100}%` }} />
                   </>
                 )}
               </div>
-              <div className="flex gap-4 text-xs text-zinc-500">
+              <div className="flex gap-4 text-xs text-zinc-600">
                 <span><span className="text-green-400 font-medium">{vtStats.clean}</span> clean</span>
-                {vtStats.suspicious > 0 && (
-                  <span><span className="text-yellow-400 font-medium">{vtStats.suspicious}</span> suspicious</span>
-                )}
-                {vtStats.malicious > 0 && (
-                  <span><span className="text-red-400 font-medium">{vtStats.malicious}</span> malicious</span>
-                )}
-                <span className="ml-auto">{vtStats.total} engines total</span>
+                {vtStats.suspicious > 0 && <span><span className="text-yellow-400 font-medium">{vtStats.suspicious}</span> suspicious</span>}
+                {vtStats.malicious > 0 && <span><span className="text-red-400 font-medium">{vtStats.malicious}</span> malicious</span>}
+                <span className="ml-auto">{vtStats.total} engines</span>
               </div>
             </div>
           )}
@@ -558,42 +639,46 @@ async function ResultsContent({ domain }: { domain: string }) {
         </div>
       </div>
 
-      {/* VPN CTA */}
+      {/* ── VPN CTA ──────────────────────────────────────────────────────────── */}
       {showVPNCTA && (
-        <div className="rounded-2xl p-5 border border-yellow-700/50 bg-yellow-950/20 flex flex-col gap-4">
-          <div>
-            <p className="text-yellow-300 font-semibold text-base">Stay protected online</p>
-            <p className="text-yellow-200/60 text-sm mt-1">
-              This site may be risky. A VPN encrypts your traffic and hides your location.
+        <div className="rounded-2xl border border-zinc-700/60 bg-zinc-900/60 overflow-hidden">
+          <div className="px-5 py-4 border-b border-zinc-800">
+            <p className="text-white font-semibold text-sm">Protect yourself online</p>
+            <p className="text-zinc-500 text-xs mt-0.5">
+              A VPN encrypts your traffic and masks your location — especially useful when visiting unfamiliar sites.
             </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-zinc-800">
             <a
               href="https://www.expressvpn.com"
               target="_blank"
               rel="noopener noreferrer sponsored"
-              className="flex-1 flex flex-col gap-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-5 py-4 transition-colors"
+              className="flex-1 flex items-center justify-between px-5 py-4 hover:bg-zinc-800/60 transition-colors group"
             >
-              <span className="text-white font-bold text-sm">ExpressVPN</span>
-              <span className="text-zinc-400 text-xs">Fast, trusted, 30-day money-back</span>
-              <span className="text-green-400 text-xs font-medium mt-1">Get ExpressVPN →</span>
+              <div>
+                <p className="text-white text-sm font-semibold">ExpressVPN</p>
+                <p className="text-zinc-500 text-xs mt-0.5">Fast · 30-day money-back guarantee</p>
+              </div>
+              <span className="text-zinc-400 group-hover:text-white text-sm transition-colors">→</span>
             </a>
             <a
               href="https://nordvpn.com"
               target="_blank"
               rel="noopener noreferrer sponsored"
-              className="flex-1 flex flex-col gap-1 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-5 py-4 transition-colors"
+              className="flex-1 flex items-center justify-between px-5 py-4 hover:bg-zinc-800/60 transition-colors group"
             >
-              <span className="text-white font-bold text-sm">NordVPN</span>
-              <span className="text-zinc-400 text-xs">Feature-rich, strong privacy record</span>
-              <span className="text-green-400 text-xs font-medium mt-1">Get NordVPN →</span>
+              <div>
+                <p className="text-white text-sm font-semibold">NordVPN</p>
+                <p className="text-zinc-500 text-xs mt-0.5">Feature-rich · Strong privacy record</p>
+              </div>
+              <span className="text-zinc-400 group-hover:text-white text-sm transition-colors">→</span>
             </a>
           </div>
         </div>
       )}
 
-      {/* Share */}
-      <div className="flex justify-center">
+      {/* ── Share ─────────────────────────────────────────────────────────────── */}
+      <div className="flex justify-center pt-2">
         <ShareButton domain={domain} />
       </div>
 
@@ -636,7 +721,7 @@ export default async function CheckPage({
           <div className="flex items-center justify-center min-h-[80vh]">
             <div className="flex flex-col items-center gap-4 text-zinc-400">
               <div className="w-10 h-10 border-4 border-zinc-700 border-t-green-400 rounded-full animate-spin" />
-              <p className="text-sm">Scanning {decodedDomain}...</p>
+              <p className="text-sm">Scanning {decodedDomain}…</p>
               <p className="text-xs text-zinc-600">Checking Google Safe Browsing, VirusTotal, and domain records</p>
             </div>
           </div>
