@@ -4,13 +4,11 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-function ScanIcon({ className }: { className?: string }) {
+function LockIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="2" />
-      <path d="M12 2a10 10 0 0 1 10 10" />
-      <path d="M12 6a6 6 0 0 1 6 6" />
-      <path d="M12 10a2 2 0 0 1 2 2" />
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   );
 }
@@ -72,7 +70,7 @@ export default function Home() {
       <header className="w-full border-b border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <ScanIcon className="w-6 h-6 text-green-400" />
+            <LockIcon className="w-6 h-6 text-green-400" />
             <span className="text-white font-semibold text-sm tracking-tight">IsThisSiteLegit</span>
           </Link>
           <span className="text-zinc-600 text-xs hidden sm:block">Free · No signup · Instant results</span>
@@ -255,7 +253,7 @@ export default function Home() {
       <footer className="border-t border-zinc-800/60 py-6 px-4">
         <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <ScanIcon className="w-4 h-4 text-zinc-600" />
+            <LockIcon className="w-4 h-4 text-zinc-600" />
             <span className="text-zinc-600 text-xs">IsThisSiteLegit — Free website safety checker</span>
           </div>
           <span className="text-zinc-700 text-xs">
