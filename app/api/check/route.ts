@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { saveScanResult } from "@/lib/storage";
 
 export const maxDuration = 15;
 
@@ -575,6 +576,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     checksRun,
     aiAnalysis: pageText ? { flags: aiResult.flags, summary: aiResult.summary } : null,
   };
+
+  // Persist result fire-and-forget — never delays the response
+  saveScanResult(report);
 
   return NextResponse.json(report);
 }
