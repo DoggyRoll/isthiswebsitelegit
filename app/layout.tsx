@@ -21,6 +21,9 @@ export const metadata: Metadata = {
     description:
       "Instantly check if any website is safe, legitimate, or a scam. No signup required. Powered by Google Safe Browsing and VirusTotal.",
   },
+  verification: {
+    google: "MzB7SexpKokxOBMQBW8iESdBxsxLGnG2cOl4ov37zTY",
+  },
   icons: {
     icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>",
   },
