@@ -1,30 +1,8 @@
 import type { MetadataRoute } from "next";
-
-const HIGH_VALUE_DOMAINS = [
-  "amazon.com",
-  "ebay.com",
-  "aliexpress.com",
-  "temu.com",
-  "shein.com",
-  "wish.com",
-  "etsy.com",
-  "paypal.com",
-  "cashapp.com",
-  "venmo.com",
-  "coinbase.com",
-  "binance.com",
-  "robinhood.com",
-  "facebook.com",
-  "instagram.com",
-  "tiktok.com",
-  "telegram.org",
-  "discord.com",
-  "reddit.com",
-  "craigslist.org",
-];
+import { TOP_DOMAINS } from "./site/[domain]/page";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = "https://isthissitelegit.net";
+  const base = "https://isthiswebsitelegit.com";
 
   const home: MetadataRoute.Sitemap = [
     {
@@ -35,12 +13,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  const domainPages: MetadataRoute.Sitemap = HIGH_VALUE_DOMAINS.map((domain) => ({
+  const sitePages: MetadataRoute.Sitemap = TOP_DOMAINS.map((domain) => ({
+    url: `${base}/site/${domain}`,
+    lastModified: new Date(),
+    changeFrequency: "daily" as const,
+    priority: 0.9,
+  }));
+
+  const checkPages: MetadataRoute.Sitemap = TOP_DOMAINS.map((domain) => ({
     url: `${base}/check/${domain}`,
     lastModified: new Date(),
     changeFrequency: "daily" as const,
-    priority: 0.8,
+    priority: 0.7,
   }));
 
-  return [...home, ...domainPages];
+  return [...home, ...sitePages, ...checkPages];
 }
