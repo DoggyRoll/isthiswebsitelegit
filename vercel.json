@@ -1,0 +1,16 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "checksitelegit.com" }],
+      "destination": "https://isthiswebsitelegit.com/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.checksitelegit.com" }],
+      "destination": "https://isthiswebsitelegit.com/$1",
+      "permanent": true
+    }
+  ]
+}
