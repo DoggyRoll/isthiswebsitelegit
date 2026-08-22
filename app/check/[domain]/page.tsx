@@ -9,6 +9,9 @@ export const dynamic = "force-dynamic";
 
 type CheckResult = SafetyReport & { error?: string };
 
+// Extend mock to include new fields
+
+
 // ── Data Fetching ─────────────────────────────────────────────────────────────
 
 async function fetchCheck(domain: string): Promise<CheckResult> {
@@ -40,6 +43,7 @@ async function fetchCheck(domain: string): Promise<CheckResult> {
       domainAgeDays: 3650,
       domainCreatedDate: "January 1, 2014",
       registrar: "GoDaddy",
+      whoisPrivacy: false,
       vtStats: { malicious: 0, suspicious: 0, clean: 87, total: 87 },
       threats: [],
       checksRun: {
@@ -47,46 +51,64 @@ async function fetchCheck(domain: string): Promise<CheckResult> {
         virusTotal: "clean",
         ssl: "valid",
         domainAge: "established",
+        aiContent: "clean",
       },
+      aiAnalysis: null,
     };
   }
 }
 
 // ── Score Helpers ─────────────────────────────────────────────────────────────
 
-function verdictConfig(verdict: "safe" | "caution" | "danger") {
-  switch (verdict) {
-    case "safe":
-      return {
-        label: "Likely Safe",
-        sub: "This site passed our security checks.",
-        ring: "border-green-500",
-        text: "text-green-400",
-        bg: "bg-green-500/10",
-        border: "border-green-500/30",
-        dot: "bg-green-500",
-      };
-    case "caution":
-      return {
-        label: "Proceed with Caution",
-        sub: "Some concerns were found. Review details below.",
-        ring: "border-yellow-400",
-        text: "text-yellow-400",
-        bg: "bg-yellow-400/10",
-        border: "border-yellow-400/30",
-        dot: "bg-yellow-400",
-      };
-    case "danger":
-      return {
-        label: "Avoid This Site",
-        sub: "Serious risks detected. Do not enter personal information.",
-        ring: "border-red-500",
-        text: "text-red-400",
-        bg: "bg-red-500/10",
-        border: "border-red-500/30",
-        dot: "bg-red-500",
-      };
+function verdictConfig(score: number) {
+  if (score >= 80) {
+    return {
+      label: "Likely Safe",
+      sub: "This site passed our security checks.",
+      ring: "border-green-500",
+      text: "text-green-400",
+      bg: "bg-green-500/10",
+      border: "border-green-500/30",
+    };
   }
+  if (score >= 65) {
+    return {
+      label: "Mostly Safe",
+      sub: "No major threats detected, but a few minor signals to be aware of.",
+      ring: "border-teal-400",
+      text: "text-teal-400",
+      bg: "bg-teal-400/10",
+      border: "border-teal-400/30",
+    };
+  }
+  if (score >= 40) {
+    return {
+      label: "Proceed with Caution",
+      sub: "Some concerns were found. Review the details below before proceeding.",
+      ring: "border-yellow-400",
+      text: "text-yellow-400",
+      bg: "bg-yellow-400/10",
+      border: "border-yellow-400/30",
+    };
+  }
+  if (score >= 20) {
+    return {
+      label: "High Risk",
+      sub: "Multiple red flags detected. Do not share personal or payment information.",
+      ring: "border-orange-400",
+      text: "text-orange-400",
+      bg: "bg-orange-400/10",
+      border: "border-orange-400/30",
+    };
+  }
+  return {
+    label: "Avoid This Site",
+    sub: "Serious threats detected. Do not visit or enter any information.",
+    ring: "border-red-500",
+    text: "text-red-400",
+    bg: "bg-red-500/10",
+    border: "border-red-500/30",
+  };
 }
 
 function formatAge(days: number): string {
@@ -262,19 +284,29 @@ async function ResultsContent({ domain }: { domain: string }) {
 
   const {
     safetyScore,
-    verdict,
     isUp,
     hasSSL,
     domainAgeDays,
     domainCreatedDate,
     registrar,
+    whoisPrivacy,
     vtStats,
     threats,
     checksRun,
+    aiAnalysis,
   } = data;
 
-  const vc = verdictConfig(verdict);
+  const vc = verdictConfig(safetyScore);
   const showVPNCTA = safetyScore < 60;
+
+  // Count completed sources for header
+  const sourcesChecked = [
+    true, // GSB always runs
+    checksRun.virusTotal !== "unavailable",
+    true, // SSL always runs
+    checksRun.domainAge !== "unknown",
+    checksRun.aiContent !== "unavailable",
+  ].filter(Boolean).length;
 
   // Build security check rows
   const vtLabel =
@@ -292,13 +324,15 @@ async function ResultsContent({ domain }: { domain: string }) {
       : "ok";
 
   const sslStatus = checksRun.ssl === "valid" ? "ok" : "fail";
-  const sslLabel = hasSSL ? "Connection is encrypted (HTTPS)" : "No SSL — connection is unencrypted";
+  const sslLabel = hasSSL
+    ? "Encrypted connection (HTTPS) — your data is protected in transit"
+    : "No HTTPS — anything you type can be intercepted by third parties";
 
   const gsbStatus = checksRun.googleSafeBrowsing === "flagged" ? "fail" : "ok";
   const gsbLabel =
     checksRun.googleSafeBrowsing === "flagged"
-      ? "Flagged in Google's threat database"
-      : "Not flagged in Google's threat database";
+      ? "Flagged in Google Safe Browsing — reported for malware or phishing"
+      : "Not found in Google Safe Browsing threat database";
 
   const ageStatus =
     checksRun.domainAge === "new"
@@ -309,8 +343,12 @@ async function ResultsContent({ domain }: { domain: string }) {
 
   const ageLabel =
     domainAgeDays !== null
-      ? formatAge(domainAgeDays)
-      : "Age unknown";
+      ? checksRun.domainAge === "new"
+        ? `${formatAge(domainAgeDays)} — new domains are common in scams, but not always suspicious`
+        : checksRun.domainAge === "recent"
+        ? `${formatAge(domainAgeDays)} — still building a track record`
+        : `${formatAge(domainAgeDays)} — established history`
+      : "Age could not be determined from WHOIS records";
 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 py-8 px-4">
@@ -358,7 +396,10 @@ async function ResultsContent({ domain }: { domain: string }) {
 
       {/* Security Checks */}
       <div className="flex flex-col gap-3">
-        <h2 className="text-white font-semibold text-base">Security Checks</h2>
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-white font-semibold text-base">Security Checks</h2>
+          <span className="text-zinc-500 text-xs">{sourcesChecked} sources checked</span>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SecurityCheck
             label="Google Safe Browsing"
@@ -380,7 +421,30 @@ async function ResultsContent({ domain }: { domain: string }) {
             sublabel={ageLabel}
             status={ageStatus}
           />
+          <SecurityCheck
+            label="AI Content Analysis"
+            sublabel={
+              checksRun.aiContent === "unavailable"
+                ? "Page content could not be retrieved for analysis"
+                : checksRun.aiContent === "flagged"
+                ? `${aiAnalysis?.flags.length ?? 0} suspicious pattern${(aiAnalysis?.flags.length ?? 0) === 1 ? "" : "s"} detected in page content`
+                : "No scam patterns or deceptive language detected in page content"
+            }
+            status={
+              checksRun.aiContent === "unavailable"
+                ? "unavailable"
+                : checksRun.aiContent === "flagged"
+                ? "warn"
+                : "ok"
+            }
+          />
         </div>
+        {aiAnalysis?.summary && (
+          <p className="text-zinc-400 text-xs leading-relaxed px-1">
+            <span className="text-zinc-500 font-medium">AI note: </span>
+            {aiAnalysis.summary}
+          </p>
+        )}
       </div>
 
       {/* Site Details */}
@@ -428,6 +492,23 @@ async function ResultsContent({ domain }: { domain: string }) {
             <div className="px-5 py-4 flex justify-between items-start gap-4">
               <span className="text-zinc-400 text-sm flex-shrink-0">Registrar</span>
               <span className="text-zinc-200 text-sm text-right">{registrar}</span>
+            </div>
+          )}
+
+          {/* WHOIS Privacy */}
+          {whoisPrivacy !== null && (
+            <div className="px-5 py-4 flex justify-between items-start gap-4">
+              <span className="text-zinc-400 text-sm flex-shrink-0">WHOIS Privacy</span>
+              <div className="text-right">
+                <p className={`text-sm ${whoisPrivacy ? "text-zinc-200" : "text-zinc-400"}`}>
+                  {whoisPrivacy ? "Owner identity protected" : "Owner details publicly listed"}
+                </p>
+                <p className="text-zinc-500 text-xs mt-0.5">
+                  {whoisPrivacy
+                    ? "Privacy protection is a normal and common practice — it does not indicate wrongdoing."
+                    : "The domain owner's contact details are visible in public WHOIS records."}
+                </p>
+              </div>
             </div>
           )}
 

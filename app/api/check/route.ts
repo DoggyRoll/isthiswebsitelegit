@@ -22,6 +22,7 @@ export interface SafetyReport {
   domainAgeDays: number | null;
   domainCreatedDate: string | null;
   registrar: string | null;
+  whoisPrivacy: boolean | null;
   vtStats: {
     malicious: number;
     suspicious: number;
@@ -201,23 +202,32 @@ async function checkVirusTotal(
 
 async function checkWhois(
   domain: string
-): Promise<{ createdDate: string | null; registrar: string | null }> {
+): Promise<{ createdDate: string | null; registrar: string | null; whoisPrivacy: boolean | null }> {
   const key = process.env.WHOIS_XML_API_KEY;
-  if (!key) return { createdDate: null, registrar: null };
+  if (!key) return { createdDate: null, registrar: null, whoisPrivacy: null };
 
   const res = await fetch(
     `https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey=${key}&domainName=${encodeURIComponent(domain)}&outputFormat=JSON`,
     { signal: AbortSignal.timeout(8000) }
   );
 
-  if (!res.ok) return { createdDate: null, registrar: null };
+  if (!res.ok) return { createdDate: null, registrar: null, whoisPrivacy: null };
 
   const data = await res.json();
   const record = data?.WhoisRecord;
 
+  // Detect privacy protection by checking registrant contact fields
+  const PRIVACY_KEYWORDS = ["privacy", "protect", "proxy", "whoisguard", "private", "redacted", "withheld", "masked"];
+  const registrantName: string = record?.registrant?.name ?? record?.registrantContact?.name ?? "";
+  const registrantEmail: string = record?.registrant?.email ?? record?.contactEmail ?? "";
+  const whoisPrivacy = PRIVACY_KEYWORDS.some(
+    (k) => registrantName.toLowerCase().includes(k) || registrantEmail.toLowerCase().includes(k)
+  );
+
   return {
     createdDate: record?.createdDate ?? null,
     registrar: record?.registrarName ?? null,
+    whoisPrivacy,
   };
 }
 
@@ -417,7 +427,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const whois =
     whoisResult.status === "fulfilled"
       ? whoisResult.value
-      : { createdDate: null, registrar: null };
+      : { createdDate: null, registrar: null, whoisPrivacy: null };
 
   const http =
     httpResult.status === "fulfilled"
@@ -559,6 +569,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     domainAgeDays,
     domainCreatedDate,
     registrar: whois.registrar,
+    whoisPrivacy: whois.whoisPrivacy,
     vtStats: vt,
     threats,
     checksRun,
