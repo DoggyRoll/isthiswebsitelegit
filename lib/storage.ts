@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import { Redis } from "@upstash/redis";
 import type { SafetyReport } from "@/app/api/check/route";
 
 export interface ScanRecord {
@@ -15,28 +15,11 @@ export interface ScanRecord {
   checkedAt: string;
 }
 
-// Singleton Redis client — reused across invocations in the same function instance
-let _redis: Redis | null = null;
-
 function getRedis(): Redis | null {
-  const url = process.env.REDIS_URL;
-  if (!url) return null;
-  if (_redis && _redis.status === "ready") return _redis;
-
-  _redis = new Redis(url, {
-    maxRetriesPerRequest: 1,
-    connectTimeout: 4000,
-    commandTimeout: 3000,
-    enableOfflineQueue: false,
-    lazyConnect: false,
-    tls: url.startsWith("rediss://") ? { rejectUnauthorized: false } : undefined,
-  });
-
-  _redis.on("error", () => {
-    _redis = null;
-  });
-
-  return _redis;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  return new Redis({ url, token });
 }
 
 /**
@@ -70,9 +53,9 @@ export async function saveScanResult(report: SafetyReport): Promise<void> {
     const now = Date.now();
 
     await Promise.all([
-      redis.set(`scan:${report.domain}`, JSON.stringify(record)),
-      redis.set(`scan:${report.domain}:full`, JSON.stringify(report)),
-      redis.zadd("scans:recent", now, report.domain),
+      redis.set(`scan:${report.domain}`, record),
+      redis.set(`scan:${report.domain}:full`, report),
+      redis.zadd("scans:recent", { score: now, member: report.domain }),
       redis.incr("scans:count"),
     ]);
   } catch {
@@ -84,8 +67,7 @@ export async function getScanRecord(domain: string): Promise<ScanRecord | null> 
   const redis = getRedis();
   if (!redis) return null;
   try {
-    const raw = await redis.get(`scan:${domain}`);
-    return raw ? JSON.parse(raw) : null;
+    return await redis.get<ScanRecord>(`scan:${domain}`);
   } catch {
     return null;
   }
@@ -95,8 +77,7 @@ export async function getFullReport(domain: string): Promise<SafetyReport | null
   const redis = getRedis();
   if (!redis) return null;
   try {
-    const raw = await redis.get(`scan:${domain}:full`);
-    return raw ? JSON.parse(raw) : null;
+    return await redis.get<SafetyReport>(`scan:${domain}:full`);
   } catch {
     return null;
   }
@@ -106,7 +87,7 @@ export async function getRecentScans(limit = 20): Promise<string[]> {
   const redis = getRedis();
   if (!redis) return [];
   try {
-    return await redis.zrevrange("scans:recent", 0, limit - 1);
+    return await redis.zrange("scans:recent", 0, limit - 1, { rev: true });
   } catch {
     return [];
   }
@@ -116,8 +97,7 @@ export async function getTotalScans(): Promise<number> {
   const redis = getRedis();
   if (!redis) return 0;
   try {
-    const count = await redis.get("scans:count");
-    return count ? parseInt(count, 10) : 0;
+    return (await redis.get<number>("scans:count")) ?? 0;
   } catch {
     return 0;
   }

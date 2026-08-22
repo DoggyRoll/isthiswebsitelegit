@@ -1,31 +1,20 @@
 import { NextResponse } from "next/server";
-import Redis from "ioredis";
-
-export const runtime = "nodejs";
+import { Redis } from "@upstash/redis";
 
 export async function GET() {
-  const url = process.env.REDIS_URL;
-  if (!url) return NextResponse.json({ error: "REDIS_URL not set" });
-
-  const redis = new Redis(url, {
-    tls: { rejectUnauthorized: false },
-    connectTimeout: 8000,
-    commandTimeout: 6000,
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
-    lazyConnect: true,
-  });
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return NextResponse.json({ error: "env vars not set" });
 
   try {
-    await redis.connect();
+    const redis = new Redis({ url, token });
     const ping = await redis.ping();
     await redis.set("test:connection", "ok");
     const val = await redis.get("test:connection");
     const count = await redis.get("scans:count");
-    await redis.quit();
-    return NextResponse.json({ ping, val, scansCount: count, url: url.replace(/:([^@]+)@/, ":***@") });
+    const recent = await redis.zrange("scans:recent", 0, 4, { rev: true });
+    return NextResponse.json({ ping, val, scansCount: count, recent });
   } catch (e: unknown) {
-    await redis.quit().catch(() => {});
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e), url: url.replace(/:([^@]+)@/, ":***@") });
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) });
   }
 }
