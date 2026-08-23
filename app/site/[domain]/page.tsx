@@ -203,8 +203,8 @@ export default async function SitePage({
       q: `How old is ${d}?`,
       a: record?.domainAgeDays != null
         ? record.domainAgeDays < 30
-          ? `${d} was registered ${record.domainCreatedDate ?? `${record.domainAgeDays} days ago`}. Very new domains are a common warning sign for scam sites.`
-          : `${d} was registered ${record.domainCreatedDate ?? `approximately ${Math.floor(record.domainAgeDays / 365)} years ago`}. Established domains are generally more trustworthy.`
+          ? `${d} was registered ${record.domainAgeDays} days ago. Very new domains are a common warning sign for scam sites.`
+          : `${d} was registered approximately ${Math.floor(record.domainAgeDays / 365)} years ago. Established domains are generally more trustworthy.`
         : `Domain age is one of the strongest indicators of legitimacy — scam sites are typically registered days before they go live. Run our check to see ${d}'s registration date.`,
     },
     {
