@@ -121,9 +121,9 @@ function ScoreRing({ score }: { score: number }) {
 function LockIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="10" cy="10" r="6" />
-      <line x1="14.5" y1="14.5" x2="20" y2="20" />
-      <polyline points="7.5,10 9.5,12.2 13,7.5" />
+      <circle cx="9" cy="9" r="7" />
+      <line x1="14.5" y1="14.5" x2="21" y2="21" />
+      <polyline points="6,9 8.5,11.5 13,6" />
     </svg>
   );
 }
