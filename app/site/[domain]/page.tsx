@@ -234,7 +234,7 @@ export default async function SitePage({
       <header className="w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <LockIcon className="w-6 h-6 text-green-400 group-hover:text-green-300 transition-colors" />
+            <LockIcon className="w-7 h-7 text-green-400 group-hover:text-green-300 transition-colors" />
             <span className="text-white font-semibold text-sm tracking-tight">IsThisSiteLegit</span>
           </Link>
           <Link href="/" className="text-zinc-400 hover:text-white text-sm transition-colors">

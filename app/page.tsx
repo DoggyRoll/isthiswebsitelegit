@@ -71,7 +71,7 @@ export default function Home() {
       <header className="w-full border-b border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <LockIcon className="w-6 h-6 text-green-400" />
+            <LockIcon className="w-7 h-7 text-green-400" />
             <span className="text-white font-semibold text-sm tracking-tight">IsThisSiteLegit</span>
           </Link>
           <span className="text-zinc-600 text-xs hidden sm:block">Free · No signup · Instant results</span>
