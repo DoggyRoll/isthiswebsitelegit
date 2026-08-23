@@ -72,7 +72,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <LockIcon className="w-7 h-7 text-green-400" />
-            <span className="text-white font-semibold text-sm tracking-tight">IsThisSiteLegit</span>
+            <span className="text-white font-semibold text-sm tracking-tight">IsThisWebsiteLegit</span>
           </Link>
           <span className="text-zinc-600 text-xs hidden sm:block">Free · No signup · Instant results</span>
         </div>
@@ -255,7 +255,7 @@ export default function Home() {
         <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <LockIcon className="w-4 h-4 text-zinc-600" />
-            <span className="text-zinc-600 text-xs">IsThisSiteLegit — Free website safety checker</span>
+            <span className="text-zinc-600 text-xs">IsThisWebsiteLegit — Free website safety checker</span>
           </div>
           <span className="text-zinc-700 text-xs">
             Powered by Google Safe Browsing · VirusTotal · WHOIS · Claude AI
